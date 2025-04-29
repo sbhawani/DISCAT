@@ -35,46 +35,64 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CLAS12ROOT_PATH}/Clas12Root)
 include_directories(${MACP_PATH}/core)
 include_directories("/cvmfs/oasis.opensciencegrid.org/jlab/hallb/clas12/sw/almalinux9-gcc11/local/root/6.30.04/include")
-include_directories(${MACP_PATH}/core)
 
 # Apply ROOT flags (headers + defs)
 separate_arguments(ROOT_CFLAGS)
 add_compile_options(${ROOT_CFLAGS})
 
-# --- Find all MACP shared libs (.so) ---
+# --- Find all MACP shared libs (_h.so files) ---
 file(GLOB_RECURSE MACP_SHARED_LIBS "${MACP_PATH}/core/*_h.so")
-message(STATUS "MACP libraries found: ${MACP_SHARED_LIBS}")
-file(GLOB MACP_LIBS "/w/hallb-scshelf2102/clas12/singh/HighLevelAN/FastMC/Fast_mc_setup/macparticles/core/*.so")
+message(STATUS "Found the following _h.so libraries: ${MACP_SHARED_LIBS}")
 
-find_package(ROOT REQUIRED COMPONENTS Core RIO Tree ROOTTPython)
+# --- Copy to lib*.so (NOT replacing _h.so) ---
+set(COPIED_LIBRARIES "")
+foreach(lib ${MACP_SHARED_LIBS})
+    get_filename_component(lib_name ${lib} NAME)
+    string(REPLACE "_h.so" ".so" new_name ${lib_name})
+    set(new_path "${CMAKE_BINARY_DIR}/copied_libs/lib${new_name}")
 
+    add_custom_command(
+        OUTPUT ${new_path}
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/copied_libs"
+        COMMAND ${CMAKE_COMMAND} -E copy ${lib} ${new_path}
+        COMMENT "Copying ${lib} -> ${new_path}"
+        VERBATIM
+    )
 
+    list(APPEND COPIED_LIBRARIES ${new_path})
+endforeach()
+
+# --- Create custom target to ensure copying happens ---
+add_custom_target(CopyMacpLibs ALL DEPENDS ${COPIED_LIBRARIES})
+
+# --- Find ROOT without Python support ---
+find_package(ROOT REQUIRED COMPONENTS Core RIO Tree)
 
 # --- Source files ---
 add_executable(discat
     examples/main.cpp
     examples/RunDVCSmodel.cpp
     core/DISCAT.cxx
+    core/DISCATMath.cxx
     core/FastMCModel.cxx
+    core/DVCSplotter.cxx
 )
+
+add_dependencies(discat CopyMacpLibs)
 
 # --- Link CLAS12 and MACP directories ---
 link_directories(${CLAS12ROOT_PATH}/lib)
 
-# --- Link ROOT ---
-target_link_libraries(discat 
-PRIVATE 
-${MACP_LIBS}
-${ROOT_LIBS}
-ROOT::ROOTTPython
+# --- Link libraries ---
+target_link_libraries(discat
+    PRIVATE
+    ${ROOT_LIBS}
+    ${COPIED_LIBRARIES}
+    ROOT::ROOTTPython
 )
 
-
-# --- Link MACP shared libraries directly (using full paths) ---
-# --- Also ensure that MACP shared libraries are available during runtime ---
+# --- Set RPATH so it can find copied libraries at runtime ---
 set_target_properties(discat PROPERTIES
-    BUILD_RPATH "${MACP_PATH}/core"
-    INSTALL_RPATH "${MACP_PATH}/core"
+    BUILD_RPATH "${CMAKE_BINARY_DIR}/copied_libs"
+    INSTALL_RPATH "${CMAKE_BINARY_DIR}/copied_libs"
 )
-
-

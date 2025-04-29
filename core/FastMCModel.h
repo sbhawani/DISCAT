@@ -3,25 +3,28 @@
 
 #include <string>
 
-class FastMCModel {
-public:
-    FastMCModel(const std::string& particle,
-                const std::string& simParticle,
-                const std::string& trainingDir,
-                const std::string& predictionDir,
-                const std::string& outputDir,
-                const std::string& inputRootFile);
+#include "DVCSplotter.h"
 
-    void run() const;
-    std::string getOutputPath() const;
+class FastMCModel
+{
+   public:
+    FastMCModel(const std::string& particle, const std::string& simParticle, const std::string& trainingDir, const std::string& predictionDir, const std::string& outputDir, const std::string& inputRootFile);
 
-private:
+    void run();
+    void createKinematicsPlots() { fCreateKinPlot = true; };
+    std::string getOutputPath();
+
+   private:
+    bool fCreateKinPlot = false;
+    std::shared_ptr<DVCSplotter> fDvcsPlotter;
     std::string particle_;
     std::string simParticle_;
     std::string trainingDir_;
     std::string predictionDir_;
     std::string outputDir_;
     std::string inputRootFile_;
+
+    /// set up for
 };
 
 #endif
