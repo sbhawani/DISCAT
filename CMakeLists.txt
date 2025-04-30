@@ -73,6 +73,7 @@ add_executable(discat
     examples/main.cpp
     examples/RunDVCSmodel.cpp
     core/DISCAT.cxx
+    core/BinManager.cxx
     core/DISCATMath.cxx
     core/FastMCModel.cxx
     core/DVCSplotter.cxx
