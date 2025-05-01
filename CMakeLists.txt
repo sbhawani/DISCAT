@@ -72,11 +72,14 @@ find_package(ROOT REQUIRED COMPONENTS Core RIO Tree)
 add_executable(discat
     examples/main.cpp
     examples/RunDVCSmodel.cpp
+    ##########
     core/DISCAT.cxx
+    core/InputHandler.cxx
     core/BinManager.cxx
     core/DISCATMath.cxx
     core/FastMCModel.cxx
     core/DVCSplotter.cxx
+    #################
 )
 
 add_dependencies(discat CopyMacpLibs)

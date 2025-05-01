@@ -22,9 +22,31 @@ DVCSplotter::DVCSplotter(DataLoader &loader, ConfigureSimulation &conf,
         std::make_shared<ROOT::RDF::RNode>(fLoader->GetAcceptedFrame());
     fVars = fLoader->GetDetailedVars();
     std::cout << " Checking size of fVars = " << fVars.size() << std::endl;
-    fillHistogramsRDF();
+    fDiffRanges.clear();
   }
 }
+DVCSplotter::~DVCSplotter() {
+  fVhistFullFast.clear();
+  fVhistFullOrig.clear();
+  fVhistDiffFast.clear();
+  fVhistDiffOrig.clear();
+  fVhist2DDiffFast.clear();
+  fVhist2DDiffOrig.clear();
+  fDVCSVarFast.clear();
+
+  if (fCanvas) {
+    delete fCanvas;
+    fCanvas = nullptr;
+  }
+  if (fAccEvents) {
+    fAccEvents.reset();
+  }
+  if (fComputed_df) {
+    fComputed_df.reset();
+  }
+  // Add other cleanup if needed (e.g., other ROOT-owned objects)
+}
+void DVCSplotter::LoadDataFrames() { this->fillHistogramsRDF(); }
 // I used this part of the codes from macparticle libs since its same functions
 void DVCSplotter::fillHistogramsRDF() {
   names_t cachevars;
@@ -57,22 +79,9 @@ void DVCSplotter::fillHistogramsRDF() {
     std::cout << "running for the pushing back some variables  ==== ======= "
               << std::endl;
   }
-
+  fLoader->Cache(cachevars);
   // ADD YOUR DISCAT DEFINITIONS HERE
   fAccEvents = std::make_shared<ROOT::RDF::RNode>(fLoader->GetAcceptedFrame());
-  std::vector<std::string> existingVars;
-  for (const auto &var : cachevars) {
-    if (var.find("rec") == 0 || var.find("recon__") == 0) {
-      existingVars.push_back(var);
-    } else {
-      std::cout << "Skipping unknown variable: " << var << std::endl;
-    }
-  }
-
-  // accepted events
-  auto faccEvents = fLoader->GetAcceptedFrame();
-  fAccEvents = std::make_shared<ROOT::RDF::RNode>(faccEvents);
-  fLoader->Cache(existingVars);
 
   fComputed_df =
       (*fAccEvents)
@@ -182,6 +191,8 @@ void DVCSplotter::fillHistogramsRDF() {
       fVhistFullOrig.push_back(h1d);
     }
     Double_t drange = 0.5 * valStdev[i];
+    std::cout << "print the size of vector of the ranges for plotting ="
+              << fDiffRanges.size() << std::endl;
     if (fDiffRanges.size() != 0) {
       drange = fDiffRanges[i];
     }
@@ -227,13 +238,14 @@ void DVCSplotter::fillHistogramsRDF() {
       fComputed_df->Histo1D({"h_xB", "x_{B};x_{B};Counts", 100, 0, 1}, "xB");
   auto h_t =
       fComputed_df->Histo1D({"h_t", "t;|t| [GeV^{2}];Counts", 100, -2, 2}, "t");
-  auto h_phi = fComputed_df->Histo1D({"h_phi", "phi;|phi| [rad];Counts", 100, 0, 360}, "phi");
-      auto h_W =
+  auto h_phi = fComputed_df->Histo1D(
+      {"h_phi", "phi;|phi| [rad];Counts", 100, 0, 360}, "phi");
+  auto h_W =
       fComputed_df->Histo1D({"h_W", "W; W [GeV^{2}];Counts", 100, 0, 10}, "W");
-  fHistQ2_vs_xB = fComputed_df->Histo2D(
-        {"fHistQ2_vs_xB", "Q^{2} vs x_{B};x_{B};Q^{2} [GeV^{2}]", 100, 0, 1, 100, 0, 10},
-        "xB", "Q2"
-    );
+  fHistQ2_vs_xB = fComputed_df->Histo2D({"fHistQ2_vs_xB",
+                                         "Q^{2} vs x_{B};x_{B};Q^{2} [GeV^{2}]",
+                                         100, 0, 1, 100, 0, 10},
+                                        "xB", "Q2");
   fDVCSVarFast.push_back(h_Q2);
   fDVCSVarFast.push_back(h_xB);
   fDVCSVarFast.push_back(h_t);
@@ -242,7 +254,8 @@ void DVCSplotter::fillHistogramsRDF() {
 }
 
 /// well as the DVCS variables
-void DVCSplotter::plotKinematics() {
+void DVCSplotter::plotKinematics(bool plotFastOnly) {
+  fFastOnly = plotFastOnly;
   fCanvas = new TCanvas(Form("FullVariables"), Form("FullVariables"), 100, 100,
                         fCanvasWidth,
                         fCanvasHeight); // ROOT will delete this
@@ -318,30 +331,31 @@ void DVCSplotter::plotKinematics() {
   }
 
   fCanvas->SaveAs((fSaveDir + fCanvas->GetName() + "_test.png").data());
+  fCanvas = nullptr;
 }
 
 void DVCSplotter::plotDVCSVars() {
-  TCanvas *c = new TCanvas("cDVCS", "DVCS Variables", 1200, 400);
-  c->Divide(3, 2);
+  TCanvas *fCanvas = new TCanvas("cDVCS", "DVCS Variables", 1700, 1500);
+  fCanvas->Divide(3, 2);
 
-  c->cd(1);
+  fCanvas->cd(1);
   fDVCSVarFast[0]->SetLineColor(kRed);
   fDVCSVarFast[0]->Draw();
-  c->cd(2);
+  fCanvas->cd(2);
   fDVCSVarFast[1]->SetLineColor(kBlue);
   fDVCSVarFast[1]->Draw();
-  c->cd(3);
+  fCanvas->cd(3);
   fDVCSVarFast[2]->SetLineColor(kGreen + 2);
   fDVCSVarFast[2]->Draw();
-  c->cd(4);
+  fCanvas->cd(4);
   fDVCSVarFast[3]->SetLineColor(kOrange + 2);
   fDVCSVarFast[3]->Draw();
-  c->cd(5);
+  fCanvas->cd(5);
   fDVCSVarFast[4]->SetLineColor(kRed + 2);
   fDVCSVarFast[4]->Draw();
-  c->cd(6);
+  fCanvas->cd(6);
   fHistQ2_vs_xB->Draw("hist");
-  c->SaveAs((fSaveDir + c->GetName() + "Variables.png").data());
+  fCanvas->SaveAs((fSaveDir + fCanvas->GetName() + "Variables.png").data());
 }
 
 void DVCSplotter::saveAll(const char *outFileName) {
@@ -369,8 +383,8 @@ void DVCSplotter::plotDVCSX() {
 
   DISCATMath kinCalc;
   auto crossSectionHistos =
-      kinCalc.ComputeDVCS_CrossSection(*fComputed_df, fXbins,fLuminosity);
-  
+      kinCalc.ComputeDVCS_CrossSection(*fComputed_df, fXbins, fLuminosity);
+
   /// plot the output in canvas
   size_t n_q2 = fXbins.GetQ2Bins().size() - 1;
   size_t n_t = fXbins.GetTBins().size() - 1;
@@ -388,9 +402,9 @@ void DVCSplotter::plotDVCSX() {
   int cols = n_t * n_xb;
   int rows = n_q2;
 
-  TCanvas *canvas =
-      new TCanvas("DVCS_CS_AllBins", "DVCS Cross Sections", 1600, 1200);
-  canvas->Divide(cols, rows);
+  TCanvas *fCanvas =
+      new TCanvas("DVCS_CS_AllBins", "DVCS Cross Sections", 1700, 1500);
+  fCanvas->Divide(cols, rows);
 
   int pad = 1;
   for (size_t iq = 0; iq < n_q2; ++iq) {
@@ -400,7 +414,7 @@ void DVCSplotter::plotDVCSX() {
         TH1D *hist = crossSectionHistos[index];
         if (!hist)
           continue;
-        canvas->cd(pad);
+        fCanvas->cd(pad);
         hist->SetLineColor(kBlue + 1);
         hist->SetLineWidth(2);
         hist->GetXaxis()->SetTitle("#phi [deg]");
@@ -415,20 +429,20 @@ void DVCSplotter::plotDVCSX() {
   std::cout << "Histogram: " << hist_->GetName() << "\n";
   int nbins = hist_->GetNbinsX();
 
-  for (int bin = 1; bin <= nbins; ++bin) {  // bin 0 is underflow, nbins+1 is overflow
-      double center = hist_->GetBinCenter(bin);
-      double content = hist_->GetBinContent(bin);
-      double error = hist_->GetBinError(bin);
+  for (int bin = 1; bin <= nbins;
+       ++bin) { // bin 0 is underflow, nbins+1 is overflow
+    double center = hist_->GetBinCenter(bin);
+    double content = hist_->GetBinContent(bin);
+    double error = hist_->GetBinError(bin);
 
-      std::cout << "  Bin center: " << center
-                << " | Content: " << content
-                << " | Error: " << error << "\n";
+    std::cout << "  Bin center: " << center << " | Content: " << content
+              << " | Error: " << error << "\n";
   }
   std::cout << "-------------------------------------\n";
-  canvas->SetLogy(true); 
-  canvas->Update();
-  canvas->SaveAs((fSaveDir + fCanvas->GetName() + "DVCSX_all_bins.png").data());
+  fCanvas->SetLogy(true);
+  fCanvas->Update();
+  fCanvas->SaveAs(
+      (fSaveDir + fCanvas->GetName() + "DVCSX_all_bins.png").data());
   std::cout
       << "Saved canvas with all histograms to DVCS_CrossSections_AllBins.png\n";
-  delete canvas;
 }

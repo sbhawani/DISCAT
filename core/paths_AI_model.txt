@@ -1,0 +1,12 @@
+# Format: key=value
+
+### RGA 2018 spring inbending
+A_2018_spring_inbending_0nA= /w/hallb-scshelf2102/clas12/singh/HighLevelAN/FastMC/Fast_MC_Models/rg_A_2018/spring/inbending/0nA/
+A_2018_spring_inbending_35nA= /w/hallb-scshelf2102/clas12/singh/HighLevelAN/FastMC/Fast_MC_Models/rg_A_2018/spring/inbending/35nA/
+A_2018_spring_inbending_50nA= /w/hallb-scshelf2102/clas12/singh/HighLevelAN/FastMC/Fast_MC_Models/rg_A_2018/spring/inbending/50nA/
+
+### RGA 2018 spring outbending
+A_2018_spring_outbending_0nA= /w/hallb-scshelf2102/clas12/singh/HighLevelAN/FastMC/Fast_MC_Models/rg_A_2018/spring/outbending/0nA/
+A_2018_spring_outbending_45nA= /w/hallb-scshelf2102/clas12/singh/HighLevelAN/FastMC/Fast_MC_Models/rg_A_2018/spring/outbending/45nA/
+
+#####

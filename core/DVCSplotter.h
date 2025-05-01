@@ -17,16 +17,21 @@ class DVCSplotter {
 
 public:
   DVCSplotter();
+
   DVCSplotter(DataLoader &loader, ConfigureSimulation &conf,
               const std::string &outputDir);
-
-  void plotKinematics();
+  ~DVCSplotter();
+  void LoadDataFrames();
+  void plotKinematics(bool plotFastOnly);
   void plotDVCSVars();
   void plotDVCSX();
   void saveAll(const char *outFileName);
 
   /// settters
-  void SetRangesKinPlots(std::vector<Double_t> Ranges) { fDiffRanges = Ranges; }
+  void SetRangesKinPlots(const std::vector<Double_t>& diffRanges) { 
+    fDiffRanges = diffRanges;
+    std::cout << "SetRangesKinPlots called. fDiffRanges size: " << fDiffRanges.size()<<"and "<<diffRanges.size() << std::endl;
+  }
   void SetXBinsRanges(BinManager bins) { fXbins = bins; }
   void SetXLuminosity(double lum) { fLuminosity = lum; }
 private:
@@ -57,8 +62,8 @@ private:
 
   dfth2ds_t fVhist2DDiffFast;
   dfth2ds_t fVhist2DDiffOrig;
-  Double_t fCanvasWidth{700};
-  Double_t fCanvasHeight{500};
+  Double_t fCanvasWidth{1700};
+  Double_t fCanvasHeight{1500};
   vector<Double_t> fDiffRanges;
   // Q2 vs xB histograms for binning
   ROOT::RDF::RResultPtr<TH2D> fHistQ2_vs_xB;
