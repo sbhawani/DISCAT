@@ -1,19 +1,42 @@
+// DISCATMath.cpp (updated)
 #include "DISCATMath.h"
+#include "TMath.h"
+#include <cmath>
+#include <iostream>
 
 constexpr double pi = 3.14159265358979323846;
+const double m_e = 0.000511;  // GeV
+const double m_p = 0.938272;  // GeV
 
-DISCATMath::DISCATMath(const TLorentzVector &electron_in,
-                       const TLorentzVector &electron_out,
-                       const TLorentzVector &proton_in,
-                       const TLorentzVector &proton_out,
-                       const TLorentzVector &photon) {
+namespace {
+TVector3 SphericalToCartesian(double p, double theta, double phi) {
+  double px = p * std::sin(theta) * std::cos(phi);
+  double py = p * std::sin(theta) * std::sin(phi);
+  double pz = p * std::cos(theta);
+  return TVector3(px, py, pz);
+}
+
+TLorentzVector Build4Vector(double p, double theta, double phi, double mass) {
+  TVector3 vec = SphericalToCartesian(p, theta, phi);
+  double E = std::sqrt(vec.Mag2() + mass * mass);
+  return TLorentzVector(vec, E);
+}
+} // anonymous namespace
+
+DISCATMath::DISCATMath(double e_in_E,
+                       double e_out_p, double e_out_theta, double e_out_phi,
+                       double p_out_p, double p_out_theta, double p_out_phi,
+                       double g_p, double g_theta, double g_phi) {
+  TLorentzVector electron_in(0, 0, e_in_E, e_in_E);
+  TLorentzVector electron_out = Build4Vector(e_out_p, e_out_theta, e_out_phi, m_e);
+  TLorentzVector proton_in(0, 0, 0, m_p);
+  TLorentzVector proton_out = Build4Vector(p_out_p, p_out_theta, p_out_phi, m_p);
+  TLorentzVector photon = Build4Vector(g_p, g_theta, g_phi, 0.0);
   ComputeKinematics(electron_in, electron_out, proton_in, proton_out, photon);
 }
 
-void DISCATMath::ComputeKinematics(const TLorentzVector &electron_in,
-                                   const TLorentzVector &electron_out,
-                                   const TLorentzVector &proton_in,
-                                   const TLorentzVector &proton_out,
+void DISCATMath::ComputeKinematics(const TLorentzVector &electron_in, const TLorentzVector &electron_out,
+                                   const TLorentzVector &proton_in, const TLorentzVector &proton_out,
                                    const TLorentzVector &photon) {
   TLorentzVector q = electron_in - electron_out;
   Q2_ = -q.Mag2();
@@ -23,34 +46,22 @@ void DISCATMath::ComputeKinematics(const TLorentzVector &electron_in,
   xB_ = Q2_ / (2.0 * proton_in.Dot(q));
   t_ = (proton_in - proton_out).Mag2();
 
-  // Plane angles
-  TVector3 k_in_vec = electron_in.Vect();
-  TVector3 k_out_vec = electron_out.Vect();
-  TVector3 q_vec = q.Vect();
-  TVector3 photon_vec = photon.Vect();
+  TVector3 n_L = electron_in.Vect().Cross(electron_out.Vect()).Unit();
+  TVector3 n_H = q.Vect().Cross(proton_out.Vect()).Unit();
 
-  TVector3 n_ep = k_in_vec.Cross(k_out_vec).Unit();
-  TVector3 n_gamma_p = q_vec.Cross(photon_vec).Unit();
+  double cos_phi = n_L.Dot(n_H);
+  double sin_phi = (n_L.Cross(n_H)).Dot(q.Vect().Unit());
 
-  double cos_phi = n_ep.Dot(n_gamma_p);
-  cos_phi = std::clamp(cos_phi, -1.0, 1.0);
-  double phi = std::acos(cos_phi);
+  double phi = std::atan2(sin_phi, cos_phi);
+  phi = phi + TMath::Pi();
+  phi = phi * 180.0 / TMath::Pi();
 
-  // Sign of phi
-  if (k_in_vec.Dot(n_gamma_p) < 0)
-    phi = 2 * pi - phi;
-
-  phi_deg_ = phi * 180.0 / pi;
+  phi_deg_ = phi;
 }
-constexpr double phi_min = 0.0;
-constexpr double phi_max = 360.0;
-constexpr int n_phi_bins = 12;
 
 // Integrated luminosity in cm⁻² (example, you can scale it out if not known)
 
-std::vector<TH1D *> DISCATMath::ComputeDVCS_CrossSection(ROOT::RDF::RNode df,
-                                                         const BinManager &bins,
-                                                         double luminosity) {
+std::vector<TH1D *> DISCATMath::ComputeDVCS_CrossSection(ROOT::RDF::RNode df, const BinManager &bins, double luminosity) {
   constexpr double phi_min = 0.0;
   constexpr double phi_max = 360.0;
   constexpr int n_phi_bins = 12;
@@ -74,27 +85,21 @@ std::vector<TH1D *> DISCATMath::ComputeDVCS_CrossSection(ROOT::RDF::RNode df,
         double tmin = t_bins[it], tmax = t_bins[it + 1];
         double xbmin = xb_bins[ix], xbmax = xb_bins[ix + 1];
 
-        std::string cut = Form("(Q2 > %.3f && Q2 <= %.3f) && (t > %.3f && t <= "
-                               "%.3f) && (xB > %.3f && xB <= %.3f)",
-                               qmin, qmax, tmin, tmax, xbmin, xbmax);
+        std::string cut = Form(
+            "(Q2 > %.3f && Q2 <= %.3f) && (t > %.3f && t <= "
+            "%.3f) && (xB > %.3f && xB <= %.3f)",
+            qmin, qmax, tmin, tmax, xbmin, xbmax);
 
         df.Display({"Q2", "t", "xB"})->Print();
         auto df_bin = df.Filter(cut);
         auto nEntries = df_bin.Count();
-        std::cout << "Entries in bin (Q2=[" << qmin << "," << qmax << "], t=["
-                  << tmin << "," << tmax << "], xB=[" << xbmin << "," << xbmax
-                  << "]): " << *nEntries << std::endl;
+        std::cout << "Entries in bin (Q2=[" << qmin << "," << qmax << "], t=[" << tmin << "," << tmax << "], xB=[" << xbmin << "," << xbmax << "]): " << *nEntries << std::endl;
 
-        std::string histName =
-            Form("hphi_q%.1f_t%.1f_xb%.2f", qmin, tmin, xbmin);
-        std::string histTitle = Form(
-            "d#sigma/d#phi (Q^{2}=[%.1f,%.1f], t=[%.1f,%.1f], xB=[%.2f,%.2f])",
-            qmin, qmax, tmin, tmax, xbmin, xbmax);
+        std::string histName = Form("hphi_q%.1f_t%.1f_xb%.2f", qmin, tmin, xbmin);
+        std::string histTitle = Form("d#sigma/d#phi (Q^{2}=[%.1f,%.1f], t=[%.1f,%.1f], xB=[%.2f,%.2f])", qmin, qmax, tmin, tmax, xbmin, xbmax);
 
-        auto hphi = df_bin.Histo1D(
-            {histName.c_str(), histTitle.c_str(), n_phi_bins, phi_min, phi_max},
-            "phi");
-        hphi->Draw(); // materialize
+        auto hphi = df_bin.Histo1D({histName.c_str(), histTitle.c_str(), n_phi_bins, phi_min, phi_max}, "phi");
+        // hphi->Draw(); // materialize
         std::cout << " hphi values are obtained here" << std::endl;
         // Clone histogram from RDataFrame-managed memory
         TH1D *hclone = dynamic_cast<TH1D *>(hphi->Clone(histName.c_str()));

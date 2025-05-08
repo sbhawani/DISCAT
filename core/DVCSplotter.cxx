@@ -2,27 +2,19 @@
 
 #include <cmath>
 #include <iostream>
-
-#include "BinManager.h"
-#include "DISCATMath.h"
 #include "ROOT/RDataFrame.hxx"
 #include "TCanvas.h"
 #include "TFile.h"
 #include "TLorentzVector.h"
+#include "TStyle.h"
 
-DVCSplotter::DVCSplotter(DataLoader &loader, ConfigureSimulation &conf,
-                         const std::string &outputDir)
-    : fLoader(&loader), fConf(&conf), fSaveDir(outputDir) {
+DVCSplotter::DVCSplotter(DataLoader &loader, ConfigureSimulation &conf, bool AccOnly, const std::string &outputDir) : fLoader(&loader), fConf(&conf), fAccOnly(AccOnly), fSaveDir(outputDir) {
   if (!fLoader) {
     return;
   } else {
-    std::cout << "the save dir from config is:" << fSaveDir << std::endl;
-    gSystem->Exec(Form("mkdir -p %s", fSaveDir.data()));
-    fAccEvents =
-        std::make_shared<ROOT::RDF::RNode>(fLoader->GetAcceptedFrame());
-    fVars = fLoader->GetDetailedVars();
-    std::cout << " Checking size of fVars = " << fVars.size() << std::endl;
-    fDiffRanges.clear();
+    std::cout << " *************************************" << std::endl;
+    std::cout << " DVCS plotter is plotting the outputs " << std::endl;
+    std::cout << " ************************************ " << std::endl;
   }
 }
 DVCSplotter::~DVCSplotter() {
@@ -33,7 +25,7 @@ DVCSplotter::~DVCSplotter() {
   fVhist2DDiffFast.clear();
   fVhist2DDiffOrig.clear();
   fDVCSVarFast.clear();
-
+  fDiffRanges.clear();
   if (fCanvas) {
     delete fCanvas;
     fCanvas = nullptr;
@@ -46,125 +38,58 @@ DVCSplotter::~DVCSplotter() {
   }
   // Add other cleanup if needed (e.g., other ROOT-owned objects)
 }
+
 void DVCSplotter::LoadDataFrames() { this->fillHistogramsRDF(); }
 // I used this part of the codes from macparticle libs since its same functions
-void DVCSplotter::fillHistogramsRDF() {
-  names_t cachevars;
-  std::cout << "Checking file at = " << fSaveDir + "all/predictions.root"
-            << std::endl;
 
+void DVCSplotter::fillHistogramsRDF() {
+  gSystem->Exec(Form("mkdir -p %s", fSaveDir.data()));
+  names_t cachevars;
+  /////////////========
+  fVars = fLoader->GetDetailedVars();
   // Load all fast variables
   for (const auto &var : fVars) {
-    auto fast_var = fLoader->CopyColumnFromTree(
-        "recon", fSaveDir + "all/predictions.root", var.rec_name);
-
+    auto fast_var = fLoader->CopyColumnFromTree("recon", fSaveDir + "all/predictions.root", var.rec_name);
     std::string fastDiffName = var.rec_name + "Diff";
     fLoader->DefineColumn(fastDiffName, var.acc_name + "-" + fast_var);
-
     std::string origDiffName = var.rec_name + "DiffReal";
     fLoader->DefineColumn(origDiffName, var.acc_name + "-" + var.rec_name);
-
     fFullFastVars.push_back(fast_var);
     cachevars.push_back(fast_var);
-
     fFullOrigVars.push_back(var.rec_name);
     cachevars.push_back(var.rec_name);
-
     fDiffFastVars.push_back(fastDiffName);
     cachevars.push_back(fastDiffName);
-
     fDiffOrigVars.push_back(origDiffName);
     cachevars.push_back(origDiffName);
-
-    std::cout << "running for the pushing back some variables  ==== ======= "
-              << std::endl;
   }
   fLoader->Cache(cachevars);
-  // ADD YOUR DISCAT DEFINITIONS HERE
-  fAccEvents = std::make_shared<ROOT::RDF::RNode>(fLoader->GetAcceptedFrame());
+  //this works !!
+  fAccEvents = std::make_shared<ROOT::RDF::RNode>(fLoader->GetAcceptedFrame());// accept_all fast mc prediction
+  fComputed_df = std::make_optional<ROOT::RDF::RNode>(*fAccEvents);
 
-  fComputed_df =
-      (*fAccEvents)
-          .Define("k_in", []() { return TLorentzVector(0, 0, 10.0, 10.0); })
-          .Define("p_in", []() { return TLorentzVector(0, 0, 0.0, 0.938); })
-          .Define("k_out",
-                  [](double p, double theta, double phi) {
-                    TVector3 v;
-                    v.SetMagThetaPhi(p, theta, phi);
-                    return TLorentzVector(v,
-                                          sqrt(v.Mag2() + 0.000511 * 0.000511));
-                  },
-                  {"recel_p", "recel_theta", "recel_phi"})
-          .Define("p_out",
-                  [](double p, double theta, double phi) {
-                    TVector3 v;
-                    v.SetMagThetaPhi(p, theta, phi);
-                    return TLorentzVector(v, sqrt(v.Mag2() + 0.938 * 0.938));
-                  },
-                  {"recp1_p", "recp1_theta", "recp1_phi"})
-          .Define("photon",
-                  [](double p, double theta, double phi) {
-                    TVector3 v;
-                    v.SetMagThetaPhi(p, theta, phi);
-                    return TLorentzVector(v, v.Mag());
-                  },
-                  {"recp2_p", "recp2_theta", "recp2_phi"})
-          .Define("DISKinematics",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return DISCATMath(kin, kout, pin, pout, gamma);
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"})
-          .Define("Q2",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return DISCATMath(kin, kout, pin, pout, gamma).GetQ2();
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"})
-          .Define("xB",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return DISCATMath(kin, kout, pin, pout, gamma).GetxB();
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"})
-          .Define("t",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return abs(DISCATMath(kin, kout, pin, pout, gamma).GetT());
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"})
-          .Define("phi",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return DISCATMath(kin, kout, pin, pout, gamma).GetPhi();
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"})
-          .Define("W",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return DISCATMath(kin, kout, pin, pout, gamma).GetW();
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"})
-          .Define("nu",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return DISCATMath(kin, kout, pin, pout, gamma).GetNu();
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"})
-          .Define("y",
-                  [](const TLorentzVector &kin, const TLorentzVector &kout,
-                     const TLorentzVector &pin, const TLorentzVector &pout,
-                     const TLorentzVector &gamma) {
-                    return DISCATMath(kin, kout, pin, pout, gamma).Gety();
-                  },
-                  {"k_in", "k_out", "p_in", "p_out", "photon"});
+  // compute DVCS variables 
+  *fComputed_df = define_DISCAT(*fComputed_df, "Q2", &DISCATMath::GetQ2);
+  *fComputed_df = define_DISCAT(*fComputed_df, "xB", &DISCATMath::GetxB);
+  *fComputed_df = define_DISCAT(*fComputed_df, "t", &DISCATMath::GetT);
+  *fComputed_df = define_DISCAT(*fComputed_df, "phi", &DISCATMath::GetPhi);
+  *fComputed_df = define_DISCAT(*fComputed_df, "W", &DISCATMath::GetW);
+  *fComputed_df = define_DISCAT(*fComputed_df, "nu", &DISCATMath::GetNu);
+  *fComputed_df = define_DISCAT(*fComputed_df, "y", &DISCATMath::Gety);
+  
+  //// get the rest of the histograms
+  auto h_Q2 = fComputed_df->Histo1D({"h_Q2", "Q^{2};Q^{2} [GeV^{2}];Counts", 100, 0, 10}, "Q2");
+  auto h_xB = fComputed_df->Histo1D({"h_xB", "x_{B};x_{B};Counts", 100, 0, 1}, "xB");
+  auto h_t = fComputed_df->Histo1D({"h_t", "t;|t| [GeV^{2}];Counts", 100, -2, 2}, "t");
+  auto h_phi = fComputed_df->Histo1D({"h_phi", "phi;|phi| [rad];Counts", 100, 0, 360}, "phi");
+  auto h_W = fComputed_df->Histo1D({"h_W", "W; W [GeV^{2}];Counts", 100, 0, 10}, "W");
+  fHistQ2_vs_xB = fComputed_df->Histo2D({"fHistQ2_vs_xB", "Q^{2} vs x_{B};x_{B};Q^{2} [GeV^{2}]", 100, 0, 1, 100, 0, 10}, "xB", "Q2");
+
+  fDVCSVarFast.push_back(h_Q2);
+  fDVCSVarFast.push_back(h_xB);
+  fDVCSVarFast.push_back(h_t);
+  fDVCSVarFast.push_back(h_phi);
+  fDVCSVarFast.push_back(h_W);
 
   ////////////////////
   std::vector<Double_t> valStdev;
@@ -172,97 +97,51 @@ void DVCSplotter::fillHistogramsRDF() {
     auto &var = fVars[i];
     auto stdev = fAccEvents->StdDev(fDiffFastVars[i].data());
     valStdev.push_back(*stdev);
-    std::cout << "resolution  ==== ======= " << fDiffFastVars[i] << *stdev
-              << std::endl;
+    std::cout << "resolution  ==== ======= " << fDiffFastVars[i] << *stdev << std::endl;
   }
 
   for (UInt_t i = 0; i < fVars.size(); ++i) {
     auto &var = fVars[i];
     // plot histrograms via RDataFrame
-    // 1D full distributions
-    auto h1d = fAccEvents->Histo1D(
-        {fFullFastVars[i].data(), fVars[i].title.data(), 200, var.min, var.max},
-        fFullFastVars[i].data());
+    auto h1d = fComputed_df->Histo1D({fFullFastVars[i].data(), fVars[i].title.data(), 200, var.min - 3.0, var.max}, fFullFastVars[i].data());
     fVhistFullFast.push_back(h1d);
     if (fFastOnly == kFALSE) {
-      h1d = fAccEvents->Histo1D({fFullOrigVars[i].data(), fVars[i].title.data(),
-                                 200, var.min, var.max},
-                                fFullOrigVars[i].data());
+      h1d = fAccEvents->Histo1D({fFullOrigVars[i].data(), fVars[i].title.data(), 200, var.min - 3.0, var.max}, fFullOrigVars[i].data());
       fVhistFullOrig.push_back(h1d);
     }
     Double_t drange = 0.5 * valStdev[i];
-    std::cout << "print the size of vector of the ranges for plotting ="
-              << fDiffRanges.size() << std::endl;
+    std::cout << "print the size of vector of the ranges for plotting =" << fDiffRanges.size() << std::endl;
     if (fDiffRanges.size() != 0) {
       drange = fDiffRanges[i];
     }
-
     // 1D resolutions
     // need to find max and min values
-    h1d = fAccEvents->Histo1D({fDiffFastVars[i].data(),
-                               (string("Fast #Delta") + fVars[i].title).data(),
-                               100, -drange, drange},
-                              fDiffFastVars[i].data());
+    h1d = fComputed_df->Histo1D({fDiffFastVars[i].data(), (string("Fast #Delta") + fVars[i].title).data(), 100, -drange, drange}, fDiffFastVars[i].data());
     fVhistDiffFast.push_back(h1d);
     if (fFastOnly == kFALSE) {
-      h1d = fAccEvents->Histo1D(
-          {fDiffOrigVars[i].data(),
-           (string("Original #Delta") + fVars[i].title).data(), 100, -drange,
-           drange},
-          fDiffOrigVars[i].data());
+      h1d = fAccEvents->Histo1D({fDiffOrigVars[i].data(), (string("Original #Delta") + fVars[i].title).data(), 100, -drange, drange}, fDiffOrigVars[i].data());
       fVhistDiffOrig.push_back(h1d);
     }
     // 2D resolutions versus variable
-    auto h2d = fAccEvents->Histo2D<Double_t, Double_t>(
-        {(fDiffFastVars[i] + "2D").data(),
-         (string("Fast #Delta") + fVars[i].title + " v " + fVars[i].title)
-             .data(),
-         50, var.min, var.max, 50, -drange, drange},
-        fFullFastVars[i].data(), fDiffFastVars[i].data());
+    auto h2d = fComputed_df->Histo2D<Double_t, Double_t>({(fDiffFastVars[i] + "2D").data(), (string("Fast #Delta") + fVars[i].title + " v " + fVars[i].title).data(), 50, var.min, var.max, 50, -drange, drange}, fFullFastVars[i].data(), fDiffFastVars[i].data());
     fVhist2DDiffFast.push_back(h2d);
     std::cout << "After resolutions-3 " << std::endl;
     if (fFastOnly == kFALSE) {
-      h2d = fAccEvents->Histo2D(
-          {(fDiffOrigVars[i] + "2D").data(),
-           (string("Original #Delta") + fVars[i].title + " v " + fVars[i].title)
-               .data(),
-           50, var.min, var.max, 50, -drange, drange},
-          fFullOrigVars[i].data(), fDiffOrigVars[i].data());
+      h2d = fAccEvents->Histo2D({(fDiffOrigVars[i] + "2D").data(), (string("Original #Delta") + fVars[i].title + " v " + fVars[i].title).data(), 50, var.min, var.max, 50, -drange, drange}, fFullOrigVars[i].data(), fDiffOrigVars[i].data());
       fVhist2DDiffOrig.push_back(h2d);
     }
   }
-  //// get the rest of the histograms
-  auto h_Q2 = fComputed_df->Histo1D(
-      {"h_Q2", "Q^{2};Q^{2} [GeV^{2}];Counts", 100, 0, 10}, "Q2");
-  auto h_xB =
-      fComputed_df->Histo1D({"h_xB", "x_{B};x_{B};Counts", 100, 0, 1}, "xB");
-  auto h_t =
-      fComputed_df->Histo1D({"h_t", "t;|t| [GeV^{2}];Counts", 100, -2, 2}, "t");
-  auto h_phi = fComputed_df->Histo1D(
-      {"h_phi", "phi;|phi| [rad];Counts", 100, 0, 360}, "phi");
-  auto h_W =
-      fComputed_df->Histo1D({"h_W", "W; W [GeV^{2}];Counts", 100, 0, 10}, "W");
-  fHistQ2_vs_xB = fComputed_df->Histo2D({"fHistQ2_vs_xB",
-                                         "Q^{2} vs x_{B};x_{B};Q^{2} [GeV^{2}]",
-                                         100, 0, 1, 100, 0, 10},
-                                        "xB", "Q2");
-  fDVCSVarFast.push_back(h_Q2);
-  fDVCSVarFast.push_back(h_xB);
-  fDVCSVarFast.push_back(h_t);
-  fDVCSVarFast.push_back(h_phi);
-  fDVCSVarFast.push_back(h_W);
 }
 
 /// well as the DVCS variables
 void DVCSplotter::plotKinematics(bool plotFastOnly) {
+  gStyle->SetOptStat(111111);  // Show entries, mean, RMS, under/overflow
+  std::cout << " Plotting the kinematics variable\n";
   fFastOnly = plotFastOnly;
-  fCanvas = new TCanvas(Form("FullVariables"), Form("FullVariables"), 100, 100,
-                        fCanvasWidth,
-                        fCanvasHeight); // ROOT will delete this
-  std::cout << " Plotting the kinematics variable\n";
-  auto ncols = std::ceil(((float)fVars.size()) / 3); // max 3 columns
+  fCanvas = new TCanvas(Form("FullVariables"), Form("FullVariables"), 100, 100, fCanvasWidth,
+                        fCanvasHeight);               // ROOT will delete this
+  auto ncols = std::ceil(((float)fVars.size()) / 3);  // max 3 columns
   fCanvas->Divide(3, ncols);
-  std::cout << " Plotting the kinematics variable\n";
   // Plot the full variables
   for (UInt_t i = 0; i < fVars.size(); ++i) {
     fCanvas->cd(i + 1);
@@ -280,11 +159,10 @@ void DVCSplotter::plotKinematics(bool plotFastOnly) {
       fVhistFullFast[i]->DrawCopy("");
     }
   }
-  fCanvas->SaveAs((fSaveDir + fCanvas->GetName() + "_test.png").data());
 
-  fCanvas = new TCanvas(Form("DeltaVariables"), Form("DeltaVariables"), 100,
-                        100, fCanvasWidth,
-                        fCanvasHeight); // ROOT will delete this
+  fCanvas->SaveAs((fSaveDir + fCanvas->GetName() + "_test.png").data());
+  fCanvas = new TCanvas(Form("DeltaVariables"), Form("DeltaVariables"), 100, 100, fCanvasWidth,
+                        fCanvasHeight);  // ROOT will delete this
   fCanvas->Divide(3, ncols);
   // Plot the resolution variables
   for (UInt_t i = 0; i < fVars.size(); ++i) {
@@ -305,13 +183,8 @@ void DVCSplotter::plotKinematics(bool plotFastOnly) {
   }
 
   fCanvas->SaveAs((fSaveDir + fCanvas->GetName() + "_test.png").data());
-
-  fCanvas =
-      new TCanvas(Form("FastVariables2D"), Form("FastVariables2D"), 100, 100,
-                  fCanvasWidth, fCanvasHeight); // ROOT will delete this
-  auto fCanvas2 =
-      new TCanvas(Form("OrigVariables2D"), Form("OrigVariables2D"), 100, 100,
-                  fCanvasWidth, fCanvasHeight); // ROOT will delete this
+  fCanvas = new TCanvas(Form("FastVariables2D"), Form("FastVariables2D"), 100, 100, fCanvasWidth, fCanvasHeight);        // ROOT will delete this
+  auto fCanvas2 = new TCanvas(Form("OrigVariables2D"), Form("OrigVariables2D"), 100, 100, fCanvasWidth, fCanvasHeight);  // ROOT will delete this
 
   fCanvas->Divide(3, ncols);
   fCanvas2->Divide(3, ncols);
@@ -335,6 +208,7 @@ void DVCSplotter::plotKinematics(bool plotFastOnly) {
 }
 
 void DVCSplotter::plotDVCSVars() {
+  gStyle->SetOptStat(111111);  // Show entries, mean, RMS, under/overflow
   TCanvas *fCanvas = new TCanvas("cDVCS", "DVCS Variables", 1700, 1500);
   fCanvas->Divide(3, 2);
 
@@ -362,28 +236,22 @@ void DVCSplotter::saveAll(const char *outFileName) {
   std::string fullPath = fSaveDir + outFileName;
   TFile *fout = new TFile(fullPath.c_str(), "RECREATE");
 
-  fout->cd(); // <-- Ensures histograms are written to this file
-
-  fComputed_df->Snapshot(
-      "recon_Fast",
-      fullPath.c_str(), // filename ignored when fOutputFile is set
-      {"recel_theta", "recel_phi", "recel_p", "recp1_theta", "recp1_phi",
-       "recp1_p", "recp2_theta", "recp2_phi", "recp2_p", "k_in", "k_out",
-       "p_in", "p_out", "photon", "Q2", "xB", "t"});
+  fout->cd();  // <-- Ensures histograms are written to this file
+  fComputed_df->Snapshot("recon_Fast",
+                         fullPath.c_str(),  // filename ignored when fOutputFile is set
+                         {"recon__recel_theta", "recon__recel_phi", "recon__recel_p", "recon__recp1_theta", "recon__recp1_phi", "recon__recp1_p", "recon__recp2_theta", "recon__recp2_phi", "recon__recp2_p", "Q2", "xB", "t", "phi"});
 
   for (auto &h : fDVCSVarFast) {
     std::cout << "Writing histo for the DVCS variable\n";
-    h->SetDirectory(fout); // Optional: ensures file ownership
+    h->SetDirectory(fout);  // Optional: ensures file ownership
     h->Write();
   }
   fout->Close();
-  std::cout << "Histograms saved to " << fullPath << std::endl;
 }
 void DVCSplotter::plotDVCSX() {
-
+  gStyle->SetOptStat(111111);  // Show entries, mean, RMS, under/overflow
   DISCATMath kinCalc;
-  auto crossSectionHistos =
-      kinCalc.ComputeDVCS_CrossSection(*fComputed_df, fXbins, fLuminosity);
+  auto crossSectionHistos = kinCalc.ComputeDVCS_CrossSection(*fComputed_df, fXbins, fLuminosity);
 
   /// plot the output in canvas
   size_t n_q2 = fXbins.GetQ2Bins().size() - 1;
@@ -393,17 +261,14 @@ void DVCSplotter::plotDVCSX() {
   size_t totalBins = n_q2 * n_t * n_xb;
 
   if (crossSectionHistos.size() != totalBins) {
-    std::cerr << "Mismatch: " << crossSectionHistos.size()
-              << " histograms but expected " << totalBins << " bins.\n";
+    std::cerr << "Mismatch: " << crossSectionHistos.size() << " histograms but expected " << totalBins << " bins.\n";
     return;
   }
-
   // Grid layout: sqrt layout or 1 row per Q² slice
   int cols = n_t * n_xb;
   int rows = n_q2;
 
-  TCanvas *fCanvas =
-      new TCanvas("DVCS_CS_AllBins", "DVCS Cross Sections", 1700, 1500);
+  TCanvas *fCanvas = new TCanvas("DVCS_CS_AllBins", "DVCS Cross Sections", 1700, 1500);
   fCanvas->Divide(cols, rows);
 
   int pad = 1;
@@ -412,8 +277,7 @@ void DVCSplotter::plotDVCSX() {
       for (size_t ix = 0; ix < n_xb; ++ix) {
         int index = iq * n_t * n_xb + it * n_xb + ix;
         TH1D *hist = crossSectionHistos[index];
-        if (!hist)
-          continue;
+        if (!hist) continue;
         fCanvas->cd(pad);
         hist->SetLineColor(kBlue + 1);
         hist->SetLineWidth(2);
@@ -425,24 +289,18 @@ void DVCSplotter::plotDVCSX() {
     }
   }
   auto hist_ = crossSectionHistos[2];
-  ///// to check if histograms is not empty at all
-  std::cout << "Histogram: " << hist_->GetName() << "\n";
   int nbins = hist_->GetNbinsX();
 
-  for (int bin = 1; bin <= nbins;
-       ++bin) { // bin 0 is underflow, nbins+1 is overflow
+  for (int bin = 1; bin <= nbins; ++bin) {  // bin 0 is underflow, nbins+1 is overflow
     double center = hist_->GetBinCenter(bin);
     double content = hist_->GetBinContent(bin);
     double error = hist_->GetBinError(bin);
 
-    std::cout << "  Bin center: " << center << " | Content: " << content
-              << " | Error: " << error << "\n";
+    std::cout << "  Bin center: " << center << " | Content: " << content << " | Error: " << error << "\n";
   }
   std::cout << "-------------------------------------\n";
   fCanvas->SetLogy(true);
   fCanvas->Update();
-  fCanvas->SaveAs(
-      (fSaveDir + fCanvas->GetName() + "DVCSX_all_bins.png").data());
-  std::cout
-      << "Saved canvas with all histograms to DVCS_CrossSections_AllBins.png\n";
+  fCanvas->SaveAs((fSaveDir + fCanvas->GetName() + "DVCSX_all_bins.png").data());
+  std::cout << "Saved canvas with all histograms to DVCS_CrossSections_AllBins.png\n";
 }

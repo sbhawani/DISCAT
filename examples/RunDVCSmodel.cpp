@@ -15,9 +15,6 @@ int RunDVCSmodel() {
   modelVGG->createKinematicsPlots();
   std::cout << "Asking for plots\n";
   discat.addModel(modelVGG);
-  // discat.add("pi+", "pi+", "models/pi_train/", "models/pi_pred/",
-  // "results/pi/");
-
   discat.run();
 
   std::cout << "All models finished running." << std::endl;
