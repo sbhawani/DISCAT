@@ -58,7 +58,7 @@ class DVCSplotter {
 
   //
 
-  bool fFastOnly = false;
+  bool fFastOnly = true;
   bool fAccOnly = false;  /// if you want to have both generated and accepted particles
 
   datavars_t fVars;

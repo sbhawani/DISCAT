@@ -62,6 +62,8 @@ foreach(lib ${MACP_SHARED_LIBS})
     list(APPEND COPIED_LIBRARIES ${new_path})
 endforeach()
 
+# Add pybind11
+add_subdirectory(external/pybind11)  # or use FetchContent
 # --- Create custom target to ensure copying happens ---
 add_custom_target(CopyMacpLibs ALL DEPENDS ${COPIED_LIBRARIES})
 
@@ -75,6 +77,8 @@ add_executable(discat
     ##########
     core/DISCAT.cxx
     core/InputHandler.cxx
+    core/DataConverter.cxx
+    core/DVCSEventGen.cxx
     core/BinManager.cxx
     core/DISCATMath.cxx
     core/FastMCModel.cxx
@@ -94,6 +98,7 @@ target_link_libraries(discat
     ${COPIED_LIBRARIES}
     ROOT::ROOTTPython
 )
+target_link_libraries(discat PRIVATE pybind11::embed)
 
 # --- Set RPATH so it can find copied libraries at runtime ---
 set_target_properties(discat PROPERTIES

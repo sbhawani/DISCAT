@@ -37,8 +37,11 @@ void FastMCModel::run() {
   config.SetTrainingDir(trainingDir_);  // e.g. "training_output/"
 
   std::cout << "Resolution directory is: " << config.ResolutionDir() << std::endl;
-  // DataLoader dl("tree", inputRootFile_);
-  DataLoader  dl("tree", "/w/hallb-scshelf2102/clas12/singh/HighLevelAN/Generators/dvcs_simulation/test_root.root"); /// this is only for the test with the event generat
+  //inputRootFile_ = "/w/hallb-scshelf2102/clas12/singh/HighLevelAN/Generators/dvcs_simulation/vgg_test.root"; // this is input for FastMC
+  std::cout<<" picking up file from the eventgen dir while defualt issue = "<< inputRootFile_<<std::endl;
+  gBenchmark = new TBenchmark();
+  DataLoader dl("tree", inputRootFile_);
+  //DataLoader  dl("tree", "/w/hallb-scshelf2102/clas12/singh/HighLevelAN/Generators/dvcs_simulation/vgg_test.root"); /// this is only for the test with the event generat
   dl.SimVars(info.variables);
   dl.SetFractionToProcess(1);
   SimWithKerasAccDTRes(config, dl);
@@ -52,7 +55,7 @@ void FastMCModel::run() {
   xBins.SetTBins({0.1, 0.5, 1.0});
   xBins.SetXBBins({0.1, 0.3, 0.5});
   if (fCreateKinPlot) {
-    fDvcsPlotter->plotKinematics(false);
+    fDvcsPlotter->plotKinematics(true);
     fDvcsPlotter->SetXBinsRanges(xBins);
     fDvcsPlotter->plotDVCSVars();
     fDvcsPlotter->plotDVCSX();

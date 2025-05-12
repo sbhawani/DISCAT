@@ -17,6 +17,7 @@ DVCSplotter::DVCSplotter(DataLoader &loader, ConfigureSimulation &conf, bool Acc
     std::cout << " ************************************ " << std::endl;
   }
 }
+
 DVCSplotter::~DVCSplotter() {
   fVhistFullFast.clear();
   fVhistFullOrig.clear();
@@ -62,6 +63,7 @@ void DVCSplotter::fillHistogramsRDF() {
     cachevars.push_back(fastDiffName);
     fDiffOrigVars.push_back(origDiffName);
     cachevars.push_back(origDiffName);
+    std::cout<<"fFullOrigVars = "<<var.rec_name<<"  fFullFastVars =  "<<fast_var<<std::endl;
   }
   fLoader->Cache(cachevars);
   //this works !!
@@ -76,7 +78,10 @@ void DVCSplotter::fillHistogramsRDF() {
   *fComputed_df = define_DISCAT(*fComputed_df, "W", &DISCATMath::GetW);
   *fComputed_df = define_DISCAT(*fComputed_df, "nu", &DISCATMath::GetNu);
   *fComputed_df = define_DISCAT(*fComputed_df, "y", &DISCATMath::Gety);
-  
+
+  //// just to check the filtering
+  //*fComputed_df = fComputed_df->Filter("abs(t) < 1.1");
+
   //// get the rest of the histograms
   auto h_Q2 = fComputed_df->Histo1D({"h_Q2", "Q^{2};Q^{2} [GeV^{2}];Counts", 100, 0, 10}, "Q2");
   auto h_xB = fComputed_df->Histo1D({"h_xB", "x_{B};x_{B};Counts", 100, 0, 1}, "xB");
@@ -95,9 +100,8 @@ void DVCSplotter::fillHistogramsRDF() {
   std::vector<Double_t> valStdev;
   for (UInt_t i = 0; i < fVars.size(); ++i) {
     auto &var = fVars[i];
-    auto stdev = fAccEvents->StdDev(fDiffFastVars[i].data());
+    auto stdev = fComputed_df->StdDev(fDiffFastVars[i].data());
     valStdev.push_back(*stdev);
-    std::cout << "resolution  ==== ======= " << fDiffFastVars[i] << *stdev << std::endl;
   }
 
   for (UInt_t i = 0; i < fVars.size(); ++i) {
@@ -106,7 +110,7 @@ void DVCSplotter::fillHistogramsRDF() {
     auto h1d = fComputed_df->Histo1D({fFullFastVars[i].data(), fVars[i].title.data(), 200, var.min - 3.0, var.max}, fFullFastVars[i].data());
     fVhistFullFast.push_back(h1d);
     if (fFastOnly == kFALSE) {
-      h1d = fAccEvents->Histo1D({fFullOrigVars[i].data(), fVars[i].title.data(), 200, var.min - 3.0, var.max}, fFullOrigVars[i].data());
+      h1d = fComputed_df->Histo1D({fFullOrigVars[i].data(), fVars[i].title.data(), 200, var.min - 3.0, var.max}, fFullOrigVars[i].data());
       fVhistFullOrig.push_back(h1d);
     }
     Double_t drange = 0.5 * valStdev[i];
@@ -119,7 +123,7 @@ void DVCSplotter::fillHistogramsRDF() {
     h1d = fComputed_df->Histo1D({fDiffFastVars[i].data(), (string("Fast #Delta") + fVars[i].title).data(), 100, -drange, drange}, fDiffFastVars[i].data());
     fVhistDiffFast.push_back(h1d);
     if (fFastOnly == kFALSE) {
-      h1d = fAccEvents->Histo1D({fDiffOrigVars[i].data(), (string("Original #Delta") + fVars[i].title).data(), 100, -drange, drange}, fDiffOrigVars[i].data());
+      h1d = fComputed_df->Histo1D({fDiffOrigVars[i].data(), (string("Original #Delta") + fVars[i].title).data(), 100, -drange, drange}, fDiffOrigVars[i].data());
       fVhistDiffOrig.push_back(h1d);
     }
     // 2D resolutions versus variable
@@ -127,7 +131,7 @@ void DVCSplotter::fillHistogramsRDF() {
     fVhist2DDiffFast.push_back(h2d);
     std::cout << "After resolutions-3 " << std::endl;
     if (fFastOnly == kFALSE) {
-      h2d = fAccEvents->Histo2D({(fDiffOrigVars[i] + "2D").data(), (string("Original #Delta") + fVars[i].title + " v " + fVars[i].title).data(), 50, var.min, var.max, 50, -drange, drange}, fFullOrigVars[i].data(), fDiffOrigVars[i].data());
+      h2d = fComputed_df->Histo2D({(fDiffOrigVars[i] + "2D").data(), (string("Original #Delta") + fVars[i].title + " v " + fVars[i].title).data(), 50, var.min, var.max, 50, -drange, drange}, fFullOrigVars[i].data(), fDiffOrigVars[i].data());
       fVhist2DDiffOrig.push_back(h2d);
     }
   }
@@ -136,7 +140,6 @@ void DVCSplotter::fillHistogramsRDF() {
 /// well as the DVCS variables
 void DVCSplotter::plotKinematics(bool plotFastOnly) {
   gStyle->SetOptStat(111111);  // Show entries, mean, RMS, under/overflow
-  std::cout << " Plotting the kinematics variable\n";
   fFastOnly = plotFastOnly;
   fCanvas = new TCanvas(Form("FullVariables"), Form("FullVariables"), 100, 100, fCanvasWidth,
                         fCanvasHeight);               // ROOT will delete this
@@ -242,7 +245,6 @@ void DVCSplotter::saveAll(const char *outFileName) {
                          {"recon__recel_theta", "recon__recel_phi", "recon__recel_p", "recon__recp1_theta", "recon__recp1_phi", "recon__recp1_p", "recon__recp2_theta", "recon__recp2_phi", "recon__recp2_p", "Q2", "xB", "t", "phi"});
 
   for (auto &h : fDVCSVarFast) {
-    std::cout << "Writing histo for the DVCS variable\n";
     h->SetDirectory(fout);  // Optional: ensures file ownership
     h->Write();
   }
@@ -288,19 +290,18 @@ void DVCSplotter::plotDVCSX() {
       }
     }
   }
+
   auto hist_ = crossSectionHistos[2];
   int nbins = hist_->GetNbinsX();
-
   for (int bin = 1; bin <= nbins; ++bin) {  // bin 0 is underflow, nbins+1 is overflow
     double center = hist_->GetBinCenter(bin);
     double content = hist_->GetBinContent(bin);
     double error = hist_->GetBinError(bin);
-
     std::cout << "  Bin center: " << center << " | Content: " << content << " | Error: " << error << "\n";
   }
-  std::cout << "-------------------------------------\n";
   fCanvas->SetLogy(true);
   fCanvas->Update();
   fCanvas->SaveAs((fSaveDir + fCanvas->GetName() + "DVCSX_all_bins.png").data());
+  std::cout << "-------------------------------------\n";
   std::cout << "Saved canvas with all histograms to DVCS_CrossSections_AllBins.png\n";
 }

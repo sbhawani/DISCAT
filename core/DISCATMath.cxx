@@ -44,7 +44,7 @@ void DISCATMath::ComputeKinematics(const TLorentzVector &electron_in, const TLor
   y_ = nu_ / electron_in.E();
   W_ = (proton_in + q).Mag();
   xB_ = Q2_ / (2.0 * proton_in.Dot(q));
-  t_ = (proton_in - proton_out).Mag2();
+  t_ = std::abs((proton_in - proton_out).Mag2());
 
   TVector3 n_L = electron_in.Vect().Cross(electron_out.Vect()).Unit();
   TVector3 n_H = q.Vect().Cross(proton_out.Vect()).Unit();
@@ -99,7 +99,7 @@ std::vector<TH1D *> DISCATMath::ComputeDVCS_CrossSection(ROOT::RDF::RNode df, co
         std::string histTitle = Form("d#sigma/d#phi (Q^{2}=[%.1f,%.1f], t=[%.1f,%.1f], xB=[%.2f,%.2f])", qmin, qmax, tmin, tmax, xbmin, xbmax);
 
         auto hphi = df_bin.Histo1D({histName.c_str(), histTitle.c_str(), n_phi_bins, phi_min, phi_max}, "phi");
-        // hphi->Draw(); // materialize
+        hphi->Draw(); // materialize
         std::cout << " hphi values are obtained here" << std::endl;
         // Clone histogram from RDataFrame-managed memory
         TH1D *hclone = dynamic_cast<TH1D *>(hphi->Clone(histName.c_str()));
