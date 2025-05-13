@@ -37,6 +37,8 @@ class FastMCModel {
     ////// in case using the direct input from the event gen for the studies
     if (fUseEventgen) {
         fEventGen = std::make_unique<DVCSEventGen>();
+        std::string evntgen_filename = config_["fname"];
+        config_["fname"] =outputDir_+evntgen_filename;
         fEventGen->run(config_);  
     }
 
@@ -47,11 +49,11 @@ class FastMCModel {
     simParticle_ = "all";
 
     if (fUseEventgen) {
-      std::string txtfile_from_eventgen = config_["fname"];
-      std::string converted_output_evtgen = txtfile_from_eventgen;
-      DataConverter convert_to_root(txtfile_from_eventgen, converted_output_evtgen);
+      std::string evntgen_filename = config_["fname"];
+      DataConverter convert_to_root(evntgen_filename, evntgen_filename);
       convert_to_root.processFile();
-      inputRootFile_ = converted_output_evtgen + ".root";  // this is input for FastMC
+      inputRootFile_ = evntgen_filename+ ".root";  // this is input for FastMC
+
     } else {
       inputRootFile_ = modelDir_ + "all_events_test_test.root";
     }
@@ -71,7 +73,7 @@ class FastMCModel {
   std::string outputDir_;
   std::string inputRootFile_;
   std::string outputfile_evntgen;
-  std::unordered_map<std::string, std::string> config_ = {{"model", "km15"}, {"nentries", "10"}, {"fname", "output_file"}, {"beam", "10.604"}, {"xBmin", "0.05"},  {"xBmax", "0.75"}, {"Q2min", "1.0"}, {"Q2max", "15.0"},  {"tmin", "0.0"},
+  std::unordered_map<std::string, std::string> config_ = {{"model", "km15"}, {"nentries", "10"}, {"fname", "output_file"}, {"beam", "10.604"}, {"xBmin", "0.1"},  {"xBmax", "0.65"}, {"Q2min", "1.0"}, {"Q2max", "15.0"},  {"tmin", "0.0"},
   {"tmax", "1.0"},  {"ymin", "0.05"},   {"ymax", "0.9"},  {"w2min", "4.0"},  {"radgen", "true"}, {"seed", "1234"},  {"bin", "0"}, {"fringe", "false"}};
 };
 

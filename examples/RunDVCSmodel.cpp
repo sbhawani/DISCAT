@@ -21,10 +21,10 @@ int RunDVCSmodel() {
   // it creates a directory in your output directory where it stores the outputs of eventgen in txt and root files
   //  then it reads those files for FastMC operations
   modelVGG ->useEventGen(true);
-  modelVGG ->setEvengGenPars("model", "vgg");
+  modelVGG ->setEvengGenPars("model", "km15");
   modelVGG ->setEvengGenPars("beam", "10.594");
-  modelVGG ->setEvengGenPars("nentries", "600000");
-  modelVGG ->setEvengGenPars("fname", "vgg_test");
+  modelVGG ->setEvengGenPars("nentries", "4000");
+  modelVGG ->setEvengGenPars("fname", "km15_test");
   modelVGG ->setEvengGenPars("radgen", "false");
   //// to set detector Fast MC module from the Nerual Networks trainings  
 

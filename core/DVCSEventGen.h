@@ -8,7 +8,6 @@ class DVCSEventGen {
   ~DVCSEventGen(); // Destructor
 
   // Run the Python script with the provided configuration
-  void run2(const std::unordered_map<std::string, std::string>& config_);
   void run(const std::unordered_map<std::string, std::string>& config_);
 
  private:
